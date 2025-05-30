@@ -97,6 +97,7 @@ def process_video(video_path, output_frames_dir, output_video_path):
     height = int(cap.get(cv.CAP_PROP_FRAME_HEIGHT))
     fps = cap.get(cv.CAP_PROP_FPS)
     frame_paths = []
+    all_landmarks = []  # List to store landmarks for each frame
     idx = 0
     with tqdm(total=frame_count, desc="Processing frames") as pbar:
         while True:
@@ -105,6 +106,22 @@ def process_video(video_path, output_frames_dir, output_video_path):
                 break
             save_dir = os.path.join(output_frames_dir, f"frame_{idx:05d}")
             processed_img = run_pipeline(frame, save_dir)
+            # Load landmarks if saved, else fill with -1s of correct shape
+            landmarks_path = os.path.join(save_dir, "face_landmarks.npy")
+            if os.path.exists(landmarks_path):
+                frame_landmarks = np.load(landmarks_path).tolist()
+            else:
+                # Try to infer landmark size from previous frame, else default to 478 (MediaPipe FaceMesh)
+                if (
+                    all_landmarks
+                    and all_landmarks[-1] is not None
+                    and all_landmarks[-1] != [[-1, -1, -1]]
+                ):
+                    n_points = len(all_landmarks[-1])
+                else:
+                    n_points = 478
+                frame_landmarks = [[-1, -1, -1]] * n_points
+            all_landmarks.append(frame_landmarks)
             if processed_img is None:
                 processed_img = frame  # Save untouched frame if no face
             frame_file = os.path.join(output_frames_dir, f"frame_{idx:05d}.jpg")
@@ -113,6 +130,11 @@ def process_video(video_path, output_frames_dir, output_video_path):
             idx += 1
             pbar.update(1)
     cap.release()
+    # Save all landmarks as a list to a file
+    np.save(
+        os.path.join(output_frames_dir, "all_landmarks_list.npy"),
+        np.array(all_landmarks, dtype=object),
+    )
     # Compile frames into video
     fourcc = cv.VideoWriter_fourcc(*"mp4v")
     out = cv.VideoWriter(output_video_path, fourcc, fps, (width, height))
@@ -121,6 +143,9 @@ def process_video(video_path, output_frames_dir, output_video_path):
         out.write(img)
     out.release()
     print(f"Annotated video saved as '{output_video_path}'.")
+    print(
+        f"All frame landmarks saved as 'all_landmarks_list.npy' in {output_frames_dir}."
+    )
 
 
 if __name__ == "__main__":
