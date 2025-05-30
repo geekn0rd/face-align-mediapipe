@@ -1,0 +1,6 @@
+# Face annotation and landmark detection project
+__pycache__/
+video_frames_output/
+*.mp4
+*.jpg
+*.npy
