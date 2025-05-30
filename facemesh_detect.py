@@ -87,12 +87,12 @@ def detect_facemesh_landmarks(cropped_face_img, frame_timestamp_ms=0):
 
     if not face_landmarker_result.face_landmarks:
         print("No face mesh landmarks detected.")
-        print("Note: This could be due to:")
-        print("1. Face not clearly visible in the image")
-        print("2. Face orientation is too extreme")
-        print("3. Poor lighting conditions")
-        print("4. Face is too small in the image")
-        print("5. Tracking confidence dropped between frames")
+        # print("Note: This could be due to:")
+        # print("1. Face not clearly visible in the image")
+        # print("2. Face orientation is too extreme")
+        # print("3. Poor lighting conditions")
+        # print("4. Face is too small in the image")
+        # print("5. Tracking confidence dropped between frames")
         return []
 
     # Get the first face's landmarks

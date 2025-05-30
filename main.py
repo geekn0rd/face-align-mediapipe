@@ -10,13 +10,14 @@ import face_align as face_align
 import facemesh_detect
 
 
-def run_pipeline(img, save_dir=None):
+def run_pipeline(img, save_dir=None, frame_num=None):
     """
     Run the face detection and landmark pipeline on an image.
 
     Parameters:
         img (np.ndarray): Input image
         save_dir (str, optional): Directory to save keypoints. If None, keypoints won't be saved.
+        frame_num (int, optional): Frame number for timestamp calculation
 
     Returns:
         np.ndarray: Annotated image with landmarks drawn
@@ -30,7 +31,13 @@ def run_pipeline(img, save_dir=None):
         return None
 
     # Step 2: Detect FaceMesh landmarks on cropped image
-    landmarks = facemesh_detect.detect_facemesh_landmarks(cropped_face)
+    # Calculate timestamp in milliseconds (assuming 30 fps)
+    frame_timestamp_ms = (
+        int(frame_num * (1000.0 / 30.0)) if frame_num is not None else 0
+    )
+    landmarks = facemesh_detect.detect_facemesh_landmarks(
+        cropped_face, frame_timestamp_ms
+    )
     if not landmarks:
         print("No landmarks detected.")
         return None
@@ -105,7 +112,9 @@ def process_video(video_path, output_frames_dir, output_video_path):
             if not ret:
                 break
             save_dir = os.path.join(output_frames_dir, f"frame_{idx:05d}")
-            processed_img = run_pipeline(frame, save_dir)
+            processed_img = run_pipeline(
+                frame, save_dir, frame_num=idx
+            )  # Pass frame number for timestamp
             # Load landmarks if saved, else fill with -1s of correct shape
             landmarks_path = os.path.join(save_dir, "face_landmarks.npy")
             if os.path.exists(landmarks_path):
