@@ -10,13 +10,13 @@ import face_align as face_align
 import facemesh_detect
 
 
-def run_pipeline(img, save_dir=None, frame_num=None):
+def run_pipeline(img, keypoints_dir=None, frame_num=None):
     """
     Run the face detection and landmark pipeline on an image.
 
     Parameters:
         img (np.ndarray): Input image
-        save_dir (str, optional): Directory to save keypoints. If None, keypoints won't be saved.
+        keypoints_dir (str, optional): Directory to save keypoints. If None, keypoints won't be saved.
         frame_num (int, optional): Frame number for timestamp calculation
 
     Returns:
@@ -36,7 +36,7 @@ def run_pipeline(img, save_dir=None, frame_num=None):
         int(frame_num * (1000.0 / 30.0)) if frame_num is not None else 0
     )
     landmarks = facemesh_detect.detect_facemesh_landmarks(
-        cropped_face, frame_timestamp_ms
+        cropped_face, frame_timestamp_ms, frame_num=frame_num
     )
     if not landmarks:
         print("No landmarks detected.")
@@ -47,9 +47,9 @@ def run_pipeline(img, save_dir=None, frame_num=None):
         img.copy(), landmarks, crop_coords, rotation_matrix
     )
 
-    # Step 4: Save keypoints if save_dir is provided
-    if save_dir is not None:
-        os.makedirs(save_dir, exist_ok=True)
+    # Step 4: Save keypoints if keypoints_dir is provided
+    if keypoints_dir is not None and frame_num is not None:
+        os.makedirs(keypoints_dir, exist_ok=True)
 
         # Convert landmarks to original image coordinates
         original_keypoints = []
@@ -82,8 +82,11 @@ def run_pipeline(img, save_dir=None, frame_num=None):
         original_keypoints = np.array(original_keypoints)
 
         # Save keypoints in original image space
-        np.save(os.path.join(save_dir, "face_landmarks.npy"), original_keypoints)
-        print(f"Saved keypoints to {save_dir}")
+        np.save(
+            os.path.join(keypoints_dir, f"face_landmarks_{frame_num:05d}.npy"),
+            original_keypoints,
+        )
+        print(f"Saved keypoints for frame {frame_num} to {keypoints_dir}")
 
     return annotated_img
 
@@ -98,6 +101,8 @@ def process_video(video_path, output_frames_dir, output_video_path):
         output_video_path (str): Path to save the compiled output video
     """
     os.makedirs(output_frames_dir, exist_ok=True)
+    keypoints_dir = os.path.join(output_frames_dir, "keypoints")
+    os.makedirs(keypoints_dir, exist_ok=True)
     cap = cv.VideoCapture(video_path)
     frame_count = int(cap.get(cv.CAP_PROP_FRAME_COUNT))
     width = int(cap.get(cv.CAP_PROP_FRAME_WIDTH))
@@ -106,17 +111,21 @@ def process_video(video_path, output_frames_dir, output_video_path):
     frame_paths = []
     all_landmarks = []  # List to store landmarks for each frame
     idx = 0
+    successful_frames = 0  # Counter for successful frames
     with tqdm(total=frame_count, desc="Processing frames") as pbar:
         while True:
             ret, frame = cap.read()
             if not ret:
                 break
-            save_dir = os.path.join(output_frames_dir, f"frame_{idx:05d}")
             processed_img = run_pipeline(
-                frame, save_dir, frame_num=idx
-            )  # Pass frame number for timestamp
+                frame, keypoints_dir=keypoints_dir, frame_num=idx
+            )
+            if processed_img is not None:
+                successful_frames += 1
             # Load landmarks if saved, else fill with -1s of correct shape
-            landmarks_path = os.path.join(save_dir, "face_landmarks.npy")
+            landmarks_path = os.path.join(
+                keypoints_dir, f"face_landmarks_{idx:05d}.npy"
+            )
             if os.path.exists(landmarks_path):
                 frame_landmarks = np.load(landmarks_path).tolist()
             else:
@@ -137,6 +146,7 @@ def process_video(video_path, output_frames_dir, output_video_path):
             cv.imwrite(frame_file, processed_img)
             frame_paths.append(frame_file)
             idx += 1
+            pbar.set_postfix(successful=f"{successful_frames}/{frame_count}")
             pbar.update(1)
     cap.release()
     # Save all landmarks as a list to a file
